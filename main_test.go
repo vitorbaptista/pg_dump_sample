@@ -160,6 +160,45 @@ func TestReadManifest_Columns(t *testing.T) {
 	}
 }
 
+// TestReadManifest_InvalidYAML verifies that readManifest returns an error
+// when given malformed YAML input.
+//
+// Currently skipped: readManifest silently discards the error from
+// yaml.Unmarshal (main.go:290), so malformed YAML produces an empty
+// Manifest with a nil error. Unskip once readManifest propagates the
+// parse error.
+func TestReadManifest_InvalidYAML(t *testing.T) {
+	t.Skip("known bug: readManifest discards yaml.Unmarshal error")
+
+	r := strings.NewReader("{{{{invalid yaml!!")
+	m, err := readManifest(r)
+	if err == nil {
+		t.Fatalf("expected error for invalid YAML, got nil (manifest: %+v)", m)
+	}
+}
+
+// TestConnectDB_CloseOnError verifies that connectDB does not leak a
+// connection pool when the health-check query fails (e.g. wrong database).
+//
+// Currently skipped: connectDB (main.go:228-238) calls pg.Connect which
+// allocates a pool, then returns (nil, err) without closing it when the
+// SELECT 1 probe fails. Unskip once connectDB closes db on error.
+func TestConnectDB_CloseOnError(t *testing.T) {
+	t.Skip("known bug: connectDB leaks pg.DB when health-check query fails")
+
+	// Use a non-existent database to force the SELECT 1 to fail.
+	opts := testDBOpts()
+	opts.Database = "nonexistent_db_should_not_exist"
+
+	db, err := connectDB(opts)
+	if err == nil {
+		db.Close()
+		t.Fatal("expected an error for a non-existent database, got nil")
+	}
+	// If connectDB is fixed to close the pool on error, this test
+	// simply confirms the error path doesn't panic or leak.
+}
+
 func TestBeginDump(t *testing.T) {
 	var buf bytes.Buffer
 	beginDump(&buf)

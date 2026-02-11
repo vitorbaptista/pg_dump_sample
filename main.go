@@ -431,7 +431,7 @@ func main() {
 		Password: opts.Password,
 	}
 	if opts.UseTls {
-		pgOpts.TLSConfig = &tls.Config{}
+		pgOpts.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 	db, err := connectDB(pgOpts)
 	if err != nil {
@@ -453,7 +453,7 @@ func main() {
 			Password: password,
 		}
 		if opts.UseTls {
-			pgOpts.TLSConfig = &tls.Config{}
+			pgOpts.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 		}
 		db, err = connectDB(pgOpts)
 		if err != nil {

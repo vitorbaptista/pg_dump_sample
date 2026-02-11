@@ -1,20 +1,19 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/user"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/cbroglie/mustache"
+	pg "github.com/go-pg/pg/v10"
 	flags "github.com/jessevdk/go-flags"
-	"golang.org/x/crypto/ssh/terminal"
-	pg "gopkg.in/pg.v4"
-	yaml "gopkg.in/yaml.v2"
+	"golang.org/x/term"
+	yaml "gopkg.in/yaml.v3"
 )
 
 const (
@@ -275,13 +274,13 @@ func dumpTable(w io.Writer, db *pg.DB, table string) error {
 
 func readPassword(username string) (string, error) {
 	fmt.Fprintf(os.Stderr, "Password for %s: ", username)
-	password, err := terminal.ReadPassword(int(syscall.Stdin))
+	password, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Print("\n")
 	return string(password), err
 }
 
 func readManifest(r io.Reader) (*Manifest, error) {
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
@@ -425,13 +424,16 @@ func main() {
 	}
 
 	// Connect to the DB
-	db, err := connectDB(&pg.Options{
+	pgOpts := &pg.Options{
 		Addr:     fmt.Sprintf("%s:%d", opts.Host, opts.Port),
 		Database: opts.Database,
-		SSL:      opts.UseTls,
 		User:     opts.Username,
 		Password: opts.Password,
-	})
+	}
+	if opts.UseTls {
+		pgOpts.TLSConfig = &tls.Config{}
+	}
+	db, err := connectDB(pgOpts)
 	if err != nil {
 		password := opts.Password
 		if !opts.NoPasswordPrompt {
@@ -444,13 +446,16 @@ func main() {
 		}
 
 		// Try again, this time with password
-		db, err = connectDB(&pg.Options{
+		pgOpts = &pg.Options{
 			Addr:     fmt.Sprintf("%s:%d", opts.Host, opts.Port),
 			Database: opts.Database,
-			SSL:      opts.UseTls,
 			User:     opts.Username,
 			Password: password,
-		})
+		}
+		if opts.UseTls {
+			pgOpts.TLSConfig = &tls.Config{}
+		}
+		db, err = connectDB(pgOpts)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

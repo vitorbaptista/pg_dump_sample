@@ -1,3 +1,4 @@
 *.sw[op]
 pg_dump_sample
+pg_dump_sample_test_bin
 .tags

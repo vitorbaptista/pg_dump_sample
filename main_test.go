@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -44,13 +45,15 @@ func testDBOpts() *pg.Options {
 	}
 }
 
-// testDB connects to the test database, failing the test if it cannot.
-func testDB(t *testing.T) *pg.DB {
+// requireDB connects to the test database, skipping the test if unavailable.
+// The connection is automatically closed when the test finishes.
+func requireDB(t *testing.T) *pg.DB {
 	t.Helper()
 	db, err := connectDB(testDBOpts())
 	if err != nil {
-		t.Fatalf("failed to connect to test database: %v", err)
+		t.Skipf("skipping: test database not available: %v", err)
 	}
+	t.Cleanup(func() { db.Close() })
 	return db
 }
 
@@ -115,6 +118,10 @@ func TestReadManifest_PostActions(t *testing.T) {
 	m, err := readManifest(f)
 	if err != nil {
 		t.Fatalf("readManifest error: %v", err)
+	}
+
+	if len(m.Tables) == 0 {
+		t.Fatalf("expected at least 1 table, got 0")
 	}
 
 	if len(m.Tables[0].PostActions) != 1 {
@@ -223,13 +230,11 @@ func TestDumpSqlCmd(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestConnectDB(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	requireDB(t)
 }
 
 func TestGetTableCols_Users(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	cols, err := getTableCols(db, "users")
 	if err != nil {
@@ -248,8 +253,7 @@ func TestGetTableCols_Users(t *testing.T) {
 }
 
 func TestGetTableCols_Posts(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	cols, err := getTableCols(db, "posts")
 	if err != nil {
@@ -268,8 +272,7 @@ func TestGetTableCols_Posts(t *testing.T) {
 }
 
 func TestGetTableCols_Comments(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	cols, err := getTableCols(db, "comments")
 	if err != nil {
@@ -288,8 +291,7 @@ func TestGetTableCols_Comments(t *testing.T) {
 }
 
 func TestGetTableDeps_Users(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	deps, err := getTableDeps(db, "users")
 	if err != nil {
@@ -302,8 +304,7 @@ func TestGetTableDeps_Users(t *testing.T) {
 }
 
 func TestGetTableDeps_Posts(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	deps, err := getTableDeps(db, "posts")
 	if err != nil {
@@ -316,8 +317,7 @@ func TestGetTableDeps_Posts(t *testing.T) {
 }
 
 func TestGetTableDeps_Comments(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	deps, err := getTableDeps(db, "comments")
 	if err != nil {
@@ -338,8 +338,7 @@ func TestGetTableDeps_Comments(t *testing.T) {
 }
 
 func TestMakeDump_FullDump(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	f, err := os.Open("testdata/manifest_full.yaml")
 	if err != nil {
@@ -393,8 +392,7 @@ func TestMakeDump_FullDump(t *testing.T) {
 }
 
 func TestMakeDump_SampledDump(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	f, err := os.Open("testdata/manifest_sample.yaml")
 	if err != nil {
@@ -416,28 +414,27 @@ func TestMakeDump_SampledDump(t *testing.T) {
 	out := buf.String()
 
 	// Users with id <= 2: alice (1), bob (2)
-	if !strings.Contains(out, "alice") {
+	if !strings.Contains(out, "alice@example.com") {
 		t.Error("sampled dump should contain alice (id=1)")
 	}
-	if !strings.Contains(out, "bob") {
+	if !strings.Contains(out, "bob@example.com") {
 		t.Error("sampled dump should contain bob (id=2)")
 	}
 
-	// Users with id > 2 should NOT be in the dump
-	if strings.Contains(out, "charlie") {
+	// Users with id > 2 should NOT be in the dump (check emails for precise matching)
+	if strings.Contains(out, "charlie@example.com") {
 		t.Error("sampled dump should NOT contain charlie (id=3)")
 	}
-	if strings.Contains(out, "diana") {
+	if strings.Contains(out, "diana@example.com") {
 		t.Error("sampled dump should NOT contain diana (id=4)")
 	}
-	if strings.Contains(out, "eve") {
+	if strings.Contains(out, "eve@example.com") {
 		t.Error("sampled dump should NOT contain eve (id=5)")
 	}
 }
 
 func TestMakeDump_PostActions(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	f, err := os.Open("testdata/manifest_post_actions.yaml")
 	if err != nil {
@@ -468,8 +465,7 @@ func TestMakeDump_PostActions(t *testing.T) {
 }
 
 func TestMakeDump_DependencyOrdering(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	f, err := os.Open("testdata/manifest_deps.yaml")
 	if err != nil {
@@ -525,8 +521,7 @@ func TestMakeDump_DependencyOrdering(t *testing.T) {
 }
 
 func TestMakeDump_SingleTable(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	f, err := os.Open("testdata/manifest_single_table.yaml")
 	if err != nil {
@@ -568,8 +563,7 @@ func TestMakeDump_SingleTable(t *testing.T) {
 }
 
 func TestMakeDump_ExplicitColumns(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	f, err := os.Open("testdata/manifest_columns.yaml")
 	if err != nil {
@@ -614,8 +608,7 @@ func TestMakeDump_ExplicitColumns(t *testing.T) {
 }
 
 func TestMakeDump_OutputIsValidSQL(t *testing.T) {
-	db := testDB(t)
-	defer db.Close()
+	db := requireDB(t)
 
 	f, err := os.Open("testdata/manifest_full.yaml")
 	if err != nil {
@@ -656,25 +649,35 @@ func TestMakeDump_OutputIsValidSQL(t *testing.T) {
 	}
 }
 
-// TestEndToEnd_Binary builds and runs the binary against the test database.
-func TestEndToEnd_Binary(t *testing.T) {
-	// Build the binary
-	buildCmd := exec.Command("go", "build", "-o", "pg_dump_sample_test_bin", ".")
-	buildCmd.Dir = "."
+// buildTestBinary builds the binary into a temp directory and returns its path.
+func buildTestBinary(t *testing.T) string {
+	t.Helper()
+	binPath := filepath.Join(t.TempDir(), "pg_dump_sample_test_bin")
+	buildCmd := exec.Command("go", "build", "-o", binPath, ".")
 	buildOut, err := buildCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build binary: %v\n%s", err, buildOut)
 	}
-	defer os.Remove("pg_dump_sample_test_bin")
+	return binPath
+}
+
+// TestEndToEnd_Binary builds and runs the binary against the test database.
+func TestEndToEnd_Binary(t *testing.T) {
+	binPath := buildTestBinary(t)
 
 	opts := testDBOpts()
-	// Parse host:port from Addr
+	// Verify DB is reachable before running the binary
+	db, err := connectDB(opts)
+	if err != nil {
+		t.Skipf("skipping: test database not available: %v", err)
+	}
+	db.Close()
+
 	parts := strings.SplitN(opts.Addr, ":", 2)
 	host := parts[0]
 	port := parts[1]
 
-	// Run the binary with the sample manifest
-	cmd := exec.Command("./pg_dump_sample_test_bin",
+	cmd := exec.Command(binPath,
 		"-h", host,
 		"-p", port,
 		"-U", opts.User,
@@ -691,7 +694,6 @@ func TestEndToEnd_Binary(t *testing.T) {
 
 	output := string(out)
 
-	// Verify the output contains expected SQL structure
 	if !strings.Contains(output, "BEGIN;") {
 		t.Error("binary output should contain BEGIN;")
 	}
@@ -700,36 +702,35 @@ func TestEndToEnd_Binary(t *testing.T) {
 	}
 
 	// Sampled data: only users with id <= 2
-	if !strings.Contains(output, "alice") {
+	if !strings.Contains(output, "alice@example.com") {
 		t.Error("binary output should contain alice")
 	}
-	if !strings.Contains(output, "bob") {
+	if !strings.Contains(output, "bob@example.com") {
 		t.Error("binary output should contain bob")
 	}
-	if strings.Contains(output, "charlie") {
+	if strings.Contains(output, "charlie@example.com") {
 		t.Error("binary output should NOT contain charlie")
 	}
 }
 
 // TestEndToEnd_OutputFile tests writing the dump to a file via -o flag.
 func TestEndToEnd_OutputFile(t *testing.T) {
-	buildCmd := exec.Command("go", "build", "-o", "pg_dump_sample_test_bin", ".")
-	buildCmd.Dir = "."
-	buildOut, err := buildCmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build binary: %v\n%s", err, buildOut)
-	}
-	defer os.Remove("pg_dump_sample_test_bin")
-
-	outFile := "testdata/test_output.sql"
-	defer os.Remove(outFile)
+	binPath := buildTestBinary(t)
 
 	opts := testDBOpts()
+	db, err := connectDB(opts)
+	if err != nil {
+		t.Skipf("skipping: test database not available: %v", err)
+	}
+	db.Close()
+
+	outFile := filepath.Join(t.TempDir(), "test_output.sql")
+
 	parts := strings.SplitN(opts.Addr, ":", 2)
 	host := parts[0]
 	port := parts[1]
 
-	cmd := exec.Command("./pg_dump_sample_test_bin",
+	cmd := exec.Command(binPath,
 		"-h", host,
 		"-p", port,
 		"-U", opts.User,
@@ -756,5 +757,31 @@ func TestEndToEnd_OutputFile(t *testing.T) {
 	}
 	if !strings.Contains(output, "alice") {
 		t.Error("output file should contain alice")
+	}
+}
+
+// TestMakeDump_EmptyManifest verifies that a manifest with no tables produces
+// a valid but empty dump (just BEGIN/COMMIT wrapper).
+func TestMakeDump_EmptyManifest(t *testing.T) {
+	db := requireDB(t)
+
+	manifest := &Manifest{Tables: []ManifestItem{}}
+
+	var buf bytes.Buffer
+	err := makeDump(db, manifest, &buf)
+	if err != nil {
+		t.Fatalf("makeDump error: %v", err)
+	}
+
+	out := buf.String()
+
+	if !strings.Contains(out, "BEGIN;") {
+		t.Error("empty dump should contain BEGIN;")
+	}
+	if !strings.Contains(out, "COMMIT;") {
+		t.Error("empty dump should contain COMMIT;")
+	}
+	if strings.Contains(out, "COPY") {
+		t.Error("empty dump should not contain any COPY statements")
 	}
 }

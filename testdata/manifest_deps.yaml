@@ -1,0 +1,11 @@
+---
+# Deliberately list comments before posts/users to test dependency reordering.
+# comments depends on both posts and users, and posts depends on users.
+# The iterator should dump users first, then posts, then comments.
+tables:
+  - table: comments
+    query: "SELECT * FROM comments WHERE id <= 3"
+  - table: posts
+    query: "SELECT * FROM posts WHERE id <= 2"
+  - table: users
+    query: "SELECT * FROM users WHERE id <= 3"

@@ -1,0 +1,11 @@
+---
+vars:
+  max_user_id: "2"
+
+tables:
+  - table: users
+    query: "SELECT * FROM users WHERE id <= {{max_user_id}}"
+  - table: posts
+    query: "SELECT * FROM posts WHERE user_id <= {{max_user_id}}"
+  - table: comments
+    query: "SELECT * FROM comments WHERE user_id <= {{max_user_id}}"

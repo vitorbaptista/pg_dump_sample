@@ -1,0 +1,8 @@
+---
+tables:
+  - table: users
+    query: "SELECT * FROM users WHERE id <= 2"
+    post_actions:
+      - "SELECT pg_catalog.setval('users_id_seq', MAX(id) + 1, true) FROM users"
+  - table: posts
+    query: "SELECT * FROM posts WHERE user_id <= 2"

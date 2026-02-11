@@ -1,0 +1,5 @@
+---
+tables:
+  - table: users
+    columns: [id, username, email]
+    query: "SELECT id, username, email FROM users WHERE id <= 2"

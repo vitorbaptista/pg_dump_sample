@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	pg "gopkg.in/pg.v4"
+	pg "github.com/go-pg/pg/v10"
 )
 
 // testDBOpts returns pg.Options for the test database.
